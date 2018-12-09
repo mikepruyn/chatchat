@@ -97,23 +97,23 @@ int send_echo_message(int connfd, char *message) {
 
 int process_message(int connfd, char *message) {
   
-  if(message[0] == "\\"){
-      if(strncmp(message, "\\JOIN", 5)){
+  if(strncmp(message, "\\", 1) == 0){
+      if(strncmp(message, "\\JOIN", 5) == 0){
           //code
       }
-      else if(strncmp(message, "\\ROOMS", 5)){
+      else if(strncmp(message, "\\ROOMS", 6) == 0){
           //code
       }
-      else if(strncmp(message, "\\LEAVE", 5)){
+      else if(strncmp(message, "\\LEAVE", 6) == 0){
           //code
       }
-      else if(strncmp(message, "\\WHO", 5)){
+      else if(strncmp(message, "\\WHO", 4) == 0){
           //code
       }
-      else if(strncmp(message, "\\HELP", 5)){
+      else if(strncmp(message, "\\HELP", 5) == 0){
           //code
       }
-      else if(strncmp(message, "\\JOIN", 5)){
+      else if(strncmp(message, "\\JOIN", 5) == 0){
           //code
       }
       else if(){
