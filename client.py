@@ -20,45 +20,16 @@ def send(sock, message):
 def recv(sock):
     return sock.recv(1024).decode('utf-8')
 
-
-def list(sock):
-    send(sock, '-')
-    result = recv(sock).rstrip()
-    if result == '':
-        return []
-    else:
-        return result.split(',')[0:-1]
-
-
-def last_list(sock):
-    xs = list(sock)
-    if len(xs) == 0:
-        return ''
-    else:
-        return xs[-1]
-
-
-def ask(prompt=':-p'):
-    return input('({})'.format(prompt))
-
-
-def prompt_on_last(sock):
-    last = last_list(sock)
-    if last == '':
-        return ask()
-    else:
-        return ask(last)
-
-
 def client():
     connection = connect()
-    sentence = prompt_on_last(connection)
+    sentence = input()
 
-    while sentence != 'quit':
+    while sentence != '\LEAVE':
         send(connection, sentence)
         response = recv(connection)
         print(response.strip())
-        sentence = prompt_on_last(connection)
+        sentence = input()
+    print("GOODBYE")
 
 
 client()
