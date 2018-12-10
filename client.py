@@ -29,6 +29,7 @@ def client():
         response = recv(connection)
         print(response.strip())
         sentence = input()
+    send(connection, sentence)
     print("GOODBYE")
 
 
