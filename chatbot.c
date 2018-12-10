@@ -25,8 +25,9 @@ typedef struct sockaddr SA;
 /* Second argument to listen() */
 #define LISTENQ 1024
 
-// A lock for the message buffer.
-pthread_mutex_t lock;
+// A lock for the user and room lists.
+pthread_mutex_t room_lock;
+pthread_mutex_t user_lock;
 
 //Room list
 struct Room* roomList[MAXROOMS];
@@ -37,6 +38,7 @@ int roomi = 0;
 struct User {
 	char nickname[30];
 	int sockfd;
+	struct Room *room;
 };
 
 struct Room {
@@ -45,16 +47,14 @@ struct Room {
 	int users;
 };
 
-/*struct RoomList {
-	struct Room * room_list[MAXROOMS];
-	int roomi;
-};*/
-
 struct Room *create_room(char *name) {
+
 	struct Room *newRoom = malloc(sizeof(struct Room));
 	strcpy(newRoom->name, name);
 	newRoom->users = 0;
+	pthread_mutex_lock(&room_lock);
 	roomList[roomi++] = newRoom;
+	pthread_mutex_unlock(&room_lock);
 	return newRoom;
 }
 
@@ -62,8 +62,11 @@ struct User *create_user(char *name, int connfd, struct Room* room) {
 	struct User *newUser = malloc(sizeof(struct User));
 	strcpy(newUser->nickname, name);
 	newUser->sockfd = connfd;
+	pthread_mutex_lock(&user_lock);
 	room->user_list[room->users] = newUser;
 	room->users++;
+	pthread_mutex_unlock(&user_lock);
+	newUser->room = room;
 	return newUser;
 }
 
@@ -88,8 +91,17 @@ int contains_user(int connfd, struct Room *room, char* name) {
 	return -1;
 }
 
+struct User *user_from_connfd(int connfd) {
+	int roomindex = find_room_index(connfd);
+	for (int i = 0; i < roomList[roomindex]->users; i++) {
+		if (roomList[roomindex]->user_list[i]->sockfd == connfd) return roomList[roomindex]->user_list[i];
+	}
+	return NULL;
+}
+
 //returns 1 on successful delete, -1 otherwise
 int delete_user(int connfd, struct Room *room) {
+	pthread_mutex_lock(&user_lock);
 	for (int i = 0; i < room->users; i++) {
 		if (room->user_list[i]->sockfd == connfd) {
 			room->user_list[i] = room->user_list[room->users - 1];
@@ -97,6 +109,7 @@ int delete_user(int connfd, struct Room *room) {
 			return 1;
 		}
 	}
+	pthread_mutex_lock(&user_lock);
 	return -1;
 }
 
@@ -144,11 +157,13 @@ int process_message(int connfd, char *message) {
 			return send_message(connfd, "You are not currently in any room");
 		}
 		else if (strncmp(message, "\\WHO", 4) == 0) {
+			
 			char user_list[MAXUSERS * 32];
 			int index = find_room_index(connfd);
 			for (int i = 0; i < roomList[index]->users; i++) {
 				strcat(user_list, roomList[index]->user_list[i]->nickname);
 				strcat(user_list, "\n");
+				printf("%d \n", i);
 			}
 			return send_message(connfd, user_list);
 		}
@@ -163,6 +178,7 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
 			return send_message(connfd, ret);
 		}
+
 		else {
 			char ret[strlen(message) + 30];
 			strcat(ret, message);
@@ -171,7 +187,16 @@ int process_message(int connfd, char *message) {
 		}
 	}
 	else {
-		return -1;
+		int roomindex = find_room_index(connfd);
+		char name_message[300];
+		struct User *who = user_from_connfd(connfd);
+		if (who == NULL) return -1;
+		strcat(name_message, who->nickname);
+		strcat(name_message, ": ");
+		strcat(name_message, message);
+		for (int i = 0; i < roomList[roomindex]->users; i++) {
+			send_message(roomList[roomindex]->user_list[i]->sockfd, name_message);
+		}
 	}
 
 }
@@ -227,8 +252,9 @@ int main(int argc, char **argv) {
 		exit(0);
 	}
 
-	// Initialize the message buffer lock.
-	pthread_mutex_init(&lock, NULL);
+	// Initialize the room and user locks.
+	pthread_mutex_init(&user_lock, NULL);
+	pthread_mutex_init(&room_lock, NULL);
 
 	// The port number for this server.
 	int port = atoi(argv[1]);
