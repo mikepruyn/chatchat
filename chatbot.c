@@ -227,9 +227,6 @@ int main(int argc, char **argv) {
 		exit(0);
 	}
 
-	// initialize message buffer.
-	init_message_buf();
-
 	// Initialize the message buffer lock.
 	pthread_mutex_init(&lock, NULL);
 
