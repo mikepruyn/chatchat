@@ -34,6 +34,11 @@ int msgi = 0;
 // A lock for the message buffer.
 pthread_mutex_t lock;
 
+//Room list
+struct Room* roomList[MAXROOMS];
+
+//roomlist index
+int roomi = 0;
 
 struct User {
 	char nickname[30];
@@ -46,10 +51,16 @@ struct Room {
 	int users; 
 };
 
+/*struct RoomList {
+	struct Room * room_list[MAXROOMS];
+	int roomi;
+};*/
+
 struct Room *create_room(char *name) {
 	struct Room *newRoom = malloc(sizeof(struct Room));
 	strcpy(newRoom->name, name);
 	newRoom->users = 0;
+	roomList[roomi++] = newRoom;
 	return newRoom;
 }
 
@@ -61,6 +72,28 @@ struct User *create_user(char *name, int connfd, struct Room* room) {
 	room->users++;
 	return newUser;
 }
+
+int find_room_index(int connfd) {
+	for(int i = 0; i < roomi; i++){
+		for(int j = 0; j < roomList[i]->users; j++){
+			if(roomList[i]->user_list[j]->sockfd == connfd){
+				return i;
+			}
+		}
+	} return -1;
+}
+
+int contains_user(int connfd, struct Room *room, char* name) {
+	for(int i = 0; i < roomi; i++) {
+		for (int i = 0; i < room->users; i++) {
+			if (room->user_list[i]->sockfd == connfd) {
+				return 1;
+			}
+		}
+	}
+	return -1;
+}
+
 //returns 1 on successful delete, -1 otherwise
 int delete_user(int connfd, struct Room *room) {
 	for (int i = 0; i < room->users; i++) {
@@ -142,12 +175,12 @@ int process_message(int connfd, char *message) {
 			char *nickname = strtok(message + 5, " ");
 			char *room_name = strtok(NULL, " ");
 			int room_exists = 0;
-			/*for (each room in list of rooms) {
-				if (room->name == room_name) {
-					create_user(nickname, connfd, room);
+			for(int i = 0; i < roomi; i++) {
+				if (roomList[i]->name == room_name) {
+					create_user(nickname, connfd, roomList[i]);
 					room_exists = 1;
 				}
-			}*/
+			}
 			if (!room_exists) {
 				struct Room *newRoom = create_room(room_name);
 				create_user(nickname, connfd, newRoom);
@@ -156,28 +189,43 @@ int process_message(int connfd, char *message) {
 		}
 		else if (strncmp(message, "\\ROOMS", 6) == 0) {
 			char room_list[MAXROOMS * 32];
-			/*for (each room in list of rooms) {
-				strcat(room_list, room->name);
-			}*/
+			for (int i = 0; i < roomi; i++) {
+				strcat(room_list, roomList[i]->name);
+			}
 			send_message(connfd, room_list);
-			
 		}
 		else if (strncmp(message, "\\LEAVE", 6) == 0) {
-			/*for (each room in list of rooms) {
-				if (delete_user(connfd, room) == 1) {
+			for (int i = 0; i < roomi; i++) {
+				if (delete_user(connfd, roomList[i]) == 1) {
 					send_message(connfd, "GOODBYE");
 				}
-			}*/
-			send_message(connfd, "GOODBYE");
+			}
+			send_message(connfd, "You are not currently in any room");
 		}
 		else if (strncmp(message, "\\WHO", 4) == 0) {
-			//code
+			char user_list[MAXUSERS * 32];
+			int index = find_room_index(connfd);
+			for (int i = 0; i < roomList[index]->users; i++) {
+				strcat(user_list, roomList[index]->user_list[i]->nickname);
+			}
+			send_message(connfd, user_list);
 		}
 		else if (strncmp(message, "\\HELP", 5) == 0) {
-			//code
+			//sorry this is an abortion idk how to do string line spacing
+			char* ret;
+			strcat(ret, "Possible commands are:\n"); 
+			strcat(ret, "\\JOIN nickname room: When the server receives this command it will add the user to the\n list of users associated with a particular room. If the room does not exist it will create a\n new room and add the user to the list of users associated with the new room. The server must\n respond to the client with the name of the room.\n");
+			strcat(ret, "\\ROOMS: When the server receives this command it will respond with a list of the available rooms.\n");
+			strcat(ret, "\\LEAVE: When the server receives this command it will remove the user from the room and, send the single message GOODBYE, and disconnect the client.\n"); 
+			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
+			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
+			send_message(connfd, ret);
 		}
 		else {
-			//command not recognized
+			char* ret; 
+			strcat(ret, message);
+			strcat(ret, " command not recognized.");
+			send_message(connfd, ret);
 		}
 	}
 	else {
