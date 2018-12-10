@@ -1,5 +1,5 @@
 /*
- * echoserverts.c - A concurrent echo server using threads
+ * chatserverts.c - A concurrent chat server using threads
  * and a message buffer.
  */
 #include <arpa/inet.h>
@@ -25,12 +25,6 @@ typedef struct sockaddr SA;
 /* Second argument to listen() */
 #define LISTENQ 1024
 
-// We will use this as a simple circular buffer of incoming messages.
-char message_buf[20][50];
-
-// This is an index into the message buffer.
-int msgi = 0;
-
 // A lock for the message buffer.
 pthread_mutex_t lock;
 
@@ -48,7 +42,7 @@ struct User {
 struct Room {
 	char name[30];
 	struct User * user_list[MAXUSERS];
-	int users; 
+	int users;
 };
 
 /*struct RoomList {
@@ -74,9 +68,9 @@ struct User *create_user(char *name, int connfd, struct Room* room) {
 }
 
 int find_room_index(int connfd) {
-	for(int i = 0; i < roomi; i++){
-		for(int j = 0; j < roomList[i]->users; j++){
-			if(roomList[i]->user_list[j]->sockfd == connfd){
+	for (int i = 0; i < roomi; i++) {
+		for (int j = 0; j < roomList[i]->users; j++) {
+			if (roomList[i]->user_list[j]->sockfd == connfd) {
 				return i;
 			}
 		}
@@ -84,7 +78,7 @@ int find_room_index(int connfd) {
 }
 
 int contains_user(int connfd, struct Room *room, char* name) {
-	for(int i = 0; i < roomi; i++) {
+	for (int i = 0; i < roomi; i++) {
 		for (int i = 0; i < room->users; i++) {
 			if (room->user_list[i]->sockfd == connfd) {
 				return 1;
@@ -106,33 +100,6 @@ int delete_user(int connfd, struct Room *room) {
 	return -1;
 }
 
-// Initialize the message buffer to empty strings.
-void init_message_buf() {
-	int i;
-	for (i = 0; i < 20; i++) {
-		strcpy(message_buf[i], "");
-	}
-}
-
-// This function adds a message that was received to the message buffer.
-// Notice the lock around the message buffer.
-void add_message(char *buf) {
-	pthread_mutex_lock(&lock);
-	strncpy(message_buf[msgi % 20], buf, 50);
-	int len = strlen(message_buf[msgi % 20]);
-	message_buf[msgi % 20][len] = '\0';
-	msgi++;
-	pthread_mutex_unlock(&lock);
-}
-
-// Destructively modify string to be upper case
-void upper_case(char *s) {
-	while (*s) {
-		*s = toupper(*s);
-		s++;
-	}
-}
-
 // A wrapper around recv to simplify calls.
 int receive_message(int connfd, char *message) {
 	return recv(connfd, message, MAXLINE, 0);
@@ -143,39 +110,13 @@ int send_message(int connfd, char *message) {
 	return send(connfd, message, strlen(message), 0);
 }
 
-// A predicate function to test incoming message.
-int is_list_message(char *message) { return strncmp(message, "-", 1) == 0; }
-
-int send_list_message(int connfd) {
-	char message[20 * 50] = "";
-	for (int i = 0; i < 20; i++) {
-		if (strcmp(message_buf[i], "") == 0) break;
-		strcat(message, message_buf[i]);
-		strcat(message, ",");
-	}
-
-	// End the message with a newline and empty. This will ensure that the
-	// bytes are sent out on the wire. Otherwise it will wait for further
-	// output bytes.
-	strcat(message, "\n\0");
-	printf("Sending: %s", message);
-
-	return send_message(connfd, message);
-}
-
-int send_echo_message(int connfd, char *message) {
-	upper_case(message);
-	add_message(message);
-	return send_message(connfd, message);
-}
-
 int process_message(int connfd, char *message) {
 	if (strncmp(message, "\\", 1) == 0) {
 		if (strncmp(message, "\\JOIN", 5) == 0) {
 			char *nickname = strtok(message + 5, " ");
 			char *room_name = strtok(NULL, " ");
 			int room_exists = 0;
-			for(int i = 0; i < roomi; i++) {
+			for (int i = 0; i < roomi; i++) {
 				if (roomList[i]->name == room_name) {
 					create_user(nickname, connfd, roomList[i]);
 					room_exists = 1;
@@ -185,65 +126,58 @@ int process_message(int connfd, char *message) {
 				struct Room *newRoom = create_room(room_name);
 				create_user(nickname, connfd, newRoom);
 			}
-			send_message(connfd, room_name);
+			return send_message(connfd, room_name);
 		}
 		else if (strncmp(message, "\\ROOMS", 6) == 0) {
 			char room_list[MAXROOMS * 32];
 			for (int i = 0; i < roomi; i++) {
 				strcat(room_list, roomList[i]->name);
 			}
-			send_message(connfd, room_list);
+			return send_message(connfd, room_list);
 		}
 		else if (strncmp(message, "\\LEAVE", 6) == 0) {
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
-					send_message(connfd, "GOODBYE");
+					return send_message(connfd, "GOODBYE");
 				}
 			}
-			send_message(connfd, "You are not currently in any room");
+			return send_message(connfd, "You are not currently in any room");
 		}
 		else if (strncmp(message, "\\WHO", 4) == 0) {
 			char user_list[MAXUSERS * 32];
 			int index = find_room_index(connfd);
 			for (int i = 0; i < roomList[index]->users; i++) {
 				strcat(user_list, roomList[index]->user_list[i]->nickname);
+				strcat(user_list, "\n");
 			}
-			send_message(connfd, user_list);
+			return send_message(connfd, user_list);
 		}
 		else if (strncmp(message, "\\HELP", 5) == 0) {
 			//sorry this is an abortion idk how to do string line spacing
-			char* ret;
-			strcat(ret, "Possible commands are:\n"); 
+			char ret[1000];
+			strcat(ret, "Possible commands are:\n");
 			strcat(ret, "\\JOIN nickname room: When the server receives this command it will add the user to the\n list of users associated with a particular room. If the room does not exist it will create a\n new room and add the user to the list of users associated with the new room. The server must\n respond to the client with the name of the room.\n");
 			strcat(ret, "\\ROOMS: When the server receives this command it will respond with a list of the available rooms.\n");
-			strcat(ret, "\\LEAVE: When the server receives this command it will remove the user from the room and, send the single message GOODBYE, and disconnect the client.\n"); 
+			strcat(ret, "\\LEAVE: When the server receives this command it will remove the user from the room and, send the single message GOODBYE, and disconnect the client.\n");
 			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
-			send_message(connfd, ret);
+			return send_message(connfd, ret);
 		}
 		else {
-			char* ret; 
+			char ret[strlen(message) + 30];
 			strcat(ret, message);
 			strcat(ret, " command not recognized.");
-			send_message(connfd, ret);
+			return send_message(connfd, ret);
 		}
 	}
 	else {
-
+		return -1;
 	}
 
-	if (is_list_message(message)) {
-		printf("Server responding with list response.\n");
-		return send_list_message(connfd);
-	}
-	else {
-		printf("Server responding with echo response.\n");
-		return send_echo_message(connfd, message);
-	}
 }
 
 // The main function that each thread will execute.
-void echo(int connfd) {
+void chat(int connfd) {
 	size_t n;
 
 	// Holds the received message.
@@ -345,8 +279,8 @@ void *thread(void *vargp) {
 	pthread_detach(pthread_self());
 	// Free the incoming argument - allocated in the main thread.
 	free(vargp);
-	// Handle the echo client requests.
-	echo(connfd);
+	// Handle the chat client requests.
+	chat(connfd);
 	printf("client disconnected.\n");
 	// Don't forget to close the connection!
 	close(connfd);
