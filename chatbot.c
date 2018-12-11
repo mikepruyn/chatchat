@@ -151,7 +151,7 @@ int process_message(int connfd, char *message) {
 
 		}
 		else if (strncmp(message, "\\ROOMS", 6) == 0) {
-			char room_list[MAXROOMS * 32] = "";
+			char room_list[MAXROOMS * 32] = "Rooms available: ";
 			for (int i = 0; i < roomi; i++) {
 				strcat(room_list, roomList[i]->name);
 				strcat(room_list, "\n");
