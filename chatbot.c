@@ -133,7 +133,7 @@ int process_message(int connfd, char *message) {
 	if (strncmp(message, "\\", 1) == 0) {
 		if (strncmp(message, "\\JOIN", 5) == 0) {
 			char *nickname, *room_name;
-			if((nickname = strtok(message + 5, " ")) == NULL || (room_name = strtok(NULL, " ")) == NULL)
+			if ((nickname = strtok(message + 5, " ")) == NULL || (room_name = strtok(NULL, " ")) == NULL)
 				return send_message(connfd, "Invalid command. Usage: \\JOIN nickname room");
 
 			int room_exists = 0;
@@ -149,7 +149,8 @@ int process_message(int connfd, char *message) {
 			}
 			return send_message(connfd, room_name);
 
-		} else if (strncmp(message, "\\ROOMS", 6) == 0) {
+		}
+		else if (strncmp(message, "\\ROOMS", 6) == 0) {
 			char room_list[MAXROOMS * 32] = "";
 			for (int i = 0; i < roomi; i++) {
 				strcat(room_list, roomList[i]->name);
@@ -157,7 +158,8 @@ int process_message(int connfd, char *message) {
 			}
 			return send_message(connfd, room_list);
 
-		} else if (strncmp(message, "\\LEAVE", 6) == 0) {
+		}
+		else if (strncmp(message, "\\LEAVE", 6) == 0) {
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
 					return send_message(connfd, "GOODBYE");
@@ -165,16 +167,21 @@ int process_message(int connfd, char *message) {
 			}
 			return send_message(connfd, "You are not currently in any room");
 
-		} else if (strncmp(message, "\\WHO", 4) == 0) {
+		}
+		else if (strncmp(message, "\\WHO", 4) == 0) {
+			int roomindex;
+			if ((roomindex = find_room_index(connfd)) == -1)
+				return send_message(connfd, "You are not in any room.");
 			char user_list[MAXUSERS * 32] = "";
-			int index = find_room_index(connfd);
-			for (int i = 0; i < roomList[index]->users; i++) {
-				strcat(user_list, roomList[index]->user_list[i]->nickname);
+			
+			for (int i = 0; i < roomList[roomindex]->users; i++) {
+				strcat(user_list, roomList[roomindex]->user_list[i]->nickname);
 				strcat(user_list, "\n");
 			}
 			return send_message(connfd, user_list);
 
-		} else if (strncmp(message, "\\HELP", 5) == 0) {
+		}
+		else if (strncmp(message, "\\HELP", 5) == 0) {
 			//sorry this is an abortion idk how to do string line spacing
 			char ret[1000] = "";
 			strcat(ret, "Possible commands are:\n");
@@ -184,15 +191,15 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
 			return send_message(connfd, ret);
-		} else {
-			char ret[300] = "";
-			strcat(ret, message);
-			strcat(ret, " command not recognized");
-			return send_message(connfd, ret);
-/*
-			int roomindex = find_room_index(connfd);
+		}
+		else {
+			int roomindex;
+			if ((roomindex = find_room_index(connfd)) == -1)
+				return send_message(connfd, "You are not in any room.");
 			struct User *target_user = NULL;
 			struct Room *currentroom = roomList[roomindex];
+			char *nickname = strtok(message + 1, " ");
+			char *direct_message = strtok(NULL, " ");
 			for (int i = 0; i < currentroom->users; i++) {
 				if (strncmp(currentroom->user_list[i]->nickname, nickname, strlen(nickname)) == 0) {
 					target_user = currentroom->user_list[i];
@@ -200,6 +207,7 @@ int process_message(int connfd, char *message) {
 				}
 			}
 			if (target_user == NULL) {
+				char ret[300] = "";
 				strcat(ret, message);
 				strcat(ret, " command not recognized.");
 				return send_message(connfd, ret);
@@ -210,11 +218,12 @@ int process_message(int connfd, char *message) {
 			strcat(name_message, who->nickname);
 			strcat(name_message, ": ");
 			strcat(name_message, direct_message);
-			return send_message(target_user->sockfd, name_message);*/
+			return send_message(target_user->sockfd, name_message);
 		}
-	} else {
+	}
+	else {
 		int roomindex;
-		if((roomindex = find_room_index(connfd)) == -1)
+		if ((roomindex = find_room_index(connfd)) == -1)
 			return send_message(connfd, "You are not in any room.");
 		char name_message[300] = "";
 		struct User *who = user_from_connfd(connfd);
