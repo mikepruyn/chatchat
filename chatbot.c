@@ -86,6 +86,16 @@ int find_room_index(int connfd) {
 	} return -1;
 }
 
+int find_user(char* name) {
+	for (int i = 0; i < roomi; i++) {
+		for (int j = 0; j < roomList[i]->users; j++) {
+			if (strncmp(roomList[i]->user_list[j]->nickname, name, strlen(name))) {
+				return i;
+			}
+		}
+	} return -1;
+}
+
 
 struct User *user_from_connfd(int connfd) {
 	int roomindex = find_room_index(connfd);
@@ -122,8 +132,10 @@ int send_message(int connfd, char *message) {
 int process_message(int connfd, char *message) {
 	if (strncmp(message, "\\", 1) == 0) {
 		if (strncmp(message, "\\JOIN", 5) == 0) {
-			char *nickname = strtok(message + 5, " ");
-			char *room_name = strtok(NULL, " ");
+			char *nickname, *room_name;
+			if((nickname = strtok(message + 5, " ")) == NULL || (room_name = strtok(NULL, " ")) == NULL)
+				return send_message(connfd, "Invalid command. Usage: \\JOIN nickname room");
+
 			int room_exists = 0;
 			for (int i = 0; i < roomi; i++) {
 				if (strncmp(roomList[i]->name, room_name, strlen(room_name)) == 0) {
@@ -136,24 +148,24 @@ int process_message(int connfd, char *message) {
 				create_user(nickname, connfd, newRoom);
 			}
 			return send_message(connfd, room_name);
-		}
-		else if (strncmp(message, "\\ROOMS", 6) == 0) {
+
+		} else if (strncmp(message, "\\ROOMS", 6) == 0) {
 			char room_list[MAXROOMS * 32] = "";
 			for (int i = 0; i < roomi; i++) {
 				strcat(room_list, roomList[i]->name);
 				strcat(room_list, "\n");
 			}
 			return send_message(connfd, room_list);
-		}
-		else if (strncmp(message, "\\LEAVE", 6) == 0) {
+
+		} else if (strncmp(message, "\\LEAVE", 6) == 0) {
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
 					return send_message(connfd, "GOODBYE");
 				}
 			}
 			return send_message(connfd, "You are not currently in any room");
-		}
-		else if (strncmp(message, "\\WHO", 4) == 0) {
+
+		} else if (strncmp(message, "\\WHO", 4) == 0) {
 			char user_list[MAXUSERS * 32] = "";
 			int index = find_room_index(connfd);
 			for (int i = 0; i < roomList[index]->users; i++) {
@@ -161,8 +173,8 @@ int process_message(int connfd, char *message) {
 				strcat(user_list, "\n");
 			}
 			return send_message(connfd, user_list);
-		}
-		else if (strncmp(message, "\\HELP", 5) == 0) {
+
+		} else if (strncmp(message, "\\HELP", 5) == 0) {
 			//sorry this is an abortion idk how to do string line spacing
 			char ret[1000] = "";
 			strcat(ret, "Possible commands are:\n");
@@ -172,10 +184,12 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
 			return send_message(connfd, ret);
-		}
-		else {
-			char *nickname = strtok(message + 1, " ");
-			char *direct_message = strtok(NULL, " ");
+		} else {
+			char ret[300] = "";
+			strcat(ret, message);
+			strcat(ret, " command not recognized");
+			return send_message(connfd, ret);
+/*
 			int roomindex = find_room_index(connfd);
 			struct User *target_user = NULL;
 			struct Room *currentroom = roomList[roomindex];
@@ -186,7 +200,6 @@ int process_message(int connfd, char *message) {
 				}
 			}
 			if (target_user == NULL) {
-				char ret[300] = "";
 				strcat(ret, message);
 				strcat(ret, " command not recognized.");
 				return send_message(connfd, ret);
@@ -197,17 +210,14 @@ int process_message(int connfd, char *message) {
 			strcat(name_message, who->nickname);
 			strcat(name_message, ": ");
 			strcat(name_message, direct_message);
-			return send_message(target_user->sockfd, name_message);
-
-
-
+			return send_message(target_user->sockfd, name_message);*/
 		}
-	}
-	else {
-		int roomindex = find_room_index(connfd);
+	} else {
+		int roomindex;
+		if((roomindex = find_room_index(connfd)) == -1)
+			return send_message(connfd, "You are not in any room.");
 		char name_message[300] = "";
 		struct User *who = user_from_connfd(connfd);
-		if (who == NULL) return -1;
 		strcat(name_message, who->nickname);
 		strcat(name_message, ": ");
 		strcat(name_message, message);
@@ -229,7 +239,6 @@ void chat(int connfd) {
 		message[n] = '\0';  // null terminate message (for string operations)
 		printf("Server received message %s (%d bytes)\n", message, (int)n);
 		n = process_message(connfd, message);
-		printf("%d\n", n);
 	}
 }
 
