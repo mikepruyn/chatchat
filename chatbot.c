@@ -112,15 +112,17 @@ int delete_user(int connfd, struct Room *room) {
 		if (room->user_list[i]->sockfd == connfd) {
 			room->user_list[i] = room->user_list[room->users - 1];
 			room->users--;
+			pthread_mutex_unlock(&user_lock);
 			return 1;
 		}
 	}
-	pthread_mutex_lock(&user_lock);
+	pthread_mutex_unlock(&user_lock);
 	return -1;
 }
 
 // A wrapper around recv to simplify calls.
 int receive_message(int connfd, char *message) {
+	//if (strncmp(message, "\\LEAVE", 6) == 0) return -1;
 	return recv(connfd, message, MAXLINE, 0);
 }
 
@@ -132,6 +134,7 @@ int send_message(int connfd, char *message) {
 int process_message(int connfd, char *message) {
 	if (strncmp(message, "\\", 1) == 0) {
 		if (strncmp(message, "\\JOIN", 5) == 0) {
+			
 			char *nickname, *room_name;
 			if ((nickname = strtok(message + 5, " ")) == NULL || (room_name = strtok(NULL, " ")) == NULL)
 				return send_message(connfd, "Invalid command. Usage: \\JOIN nickname room");
@@ -147,6 +150,7 @@ int process_message(int connfd, char *message) {
 				struct Room *newRoom = create_room(room_name);
 				create_user(nickname, connfd, newRoom);
 			}
+			
 			return send_message(connfd, room_name);
 
 		}
@@ -162,7 +166,8 @@ int process_message(int connfd, char *message) {
 		else if (strncmp(message, "\\LEAVE", 6) == 0) {
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
-					return send_message(connfd, "GOODBYE");
+					send_message(connfd, "GOODBYE");
+					return 1;
 				}
 			}
 			return send_message(connfd, "You are not currently in any room");
@@ -182,7 +187,7 @@ int process_message(int connfd, char *message) {
 
 		}
 		else if (strncmp(message, "\\HELP", 5) == 0) {
-			//sorry this is an abortion idk how to do string line spacing
+			
 			char ret[1000] = "";
 			strcat(ret, "Possible commands are:\n");
 			strcat(ret, "\\JOIN nickname room: When the server receives this command it will add the user to the\n list of users associated with a particular room. If the room does not exist it will create a\n new room and add the user to the list of users associated with the new room. The server must\n respond to the client with the name of the room.\n");
@@ -192,6 +197,36 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
 			return send_message(connfd, ret);
 		}
+		//creates a pyramid out of the input word or phrase and sends it to all users in the room
+		else if (strncmp(message, "\\PYRAMID", 8) == 0) {
+			char *word;
+			if ((word = strtok(message + 9, "\n")) == NULL)
+				return send_message(connfd, "Invalid command. Usage: \\PYRAMID word");
+			char pyramid[1000] = "";
+			int size = strlen(word);
+			for (int i = 0; i < size; i++) {
+				for (int j = 0; j < i; j++) {
+					char character[2] = "\0";
+					character[0] = word[j];
+					strcat(pyramid, character);
+				}
+				strcat(pyramid, "\n\0");
+			}
+			for (int i = size; i > 0; i--) {
+				for (int j = 0; j < i; j++) {
+					char character[2] = "\0";
+					character[0] = word[j];
+					strcat(pyramid, character);
+				}
+				strcat(pyramid, "\n\0");
+			}
+			int roomindex;
+			if ((roomindex = find_room_index(connfd)) == -1)
+				return send_message(connfd, "You are not in any room.");
+			for (int i = 0; i < roomList[roomindex]->users; i++) {
+				send_message(roomList[roomindex]->user_list[i]->sockfd, pyramid);
+			}
+		}
 		else {
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
@@ -199,7 +234,7 @@ int process_message(int connfd, char *message) {
 			struct User *target_user = NULL;
 			struct Room *currentroom = roomList[roomindex];
 			char *nickname = strtok(message + 1, " ");
-			char *direct_message = strtok(NULL, " ");
+			char *direct_message = strtok(NULL, "\n");
 			for (int i = 0; i < currentroom->users; i++) {
 				if (strncmp(currentroom->user_list[i]->nickname, nickname, strlen(nickname)) == 0) {
 					target_user = currentroom->user_list[i];
@@ -216,7 +251,7 @@ int process_message(int connfd, char *message) {
 			struct User *who = user_from_connfd(connfd);
 			if (who == NULL) return -1;
 			strcat(name_message, who->nickname);
-			strcat(name_message, ": ");
+			strcat(name_message, "[DM]: ");
 			strcat(name_message, direct_message);
 			return send_message(target_user->sockfd, name_message);
 		}
