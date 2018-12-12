@@ -1,0 +1,4 @@
+\JOIN andy room
+\WHO
+\andy hello mlady
+\LEAVE

@@ -1,6 +1,6 @@
 from socket import *
 from threading import Thread
-import sys
+import sys, time
 SERVER_NAME = 'localhost'
 SERVER_PORT = 3000
 
@@ -21,14 +21,25 @@ def recv(sock):
     return sock.recv(1024).decode('utf-8')
 
 def send_client():
-    sentence = input()
-    leave = False
-    while not leave:
-        send(connection, sentence)
+    if len(sys.argv) == 2:
+        f = open(str(sys.argv[1]),'r')
+        li = f.read().splitlines()
+        for x in li:
+            print(x)
+            send(connection, x)
+            time.sleep(1)
+            if x == "\\LEAVE" :
+                break
+
+    else:
         sentence = input()
-        if sentence == "\\LEAVE" :
-            leave = True
-    send(connection, sentence)
+        leave = False
+        while not leave:
+            send(connection, sentence)
+            sentence = input()
+            if sentence == "\\LEAVE" :
+                leave = True
+        send(connection, sentence)
 
 def rec_client():
     leave = False

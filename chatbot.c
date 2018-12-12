@@ -137,7 +137,7 @@ int process_message(int connfd, char *message) {
 			
 			char *nickname, *room_name;
 			if ((nickname = strtok(message + 5, " ")) == NULL || (room_name = strtok(NULL, " ")) == NULL)
-				return send_message(connfd, "Invalid command. Usage: \\JOIN nickname room");
+				return send_message(connfd, "Invalid command. Usage: \\JOIN nickname room\n");
 
 			int room_exists = 0;
 			for (int i = 0; i < roomi; i++) {
@@ -166,17 +166,17 @@ int process_message(int connfd, char *message) {
 		else if (strncmp(message, "\\LEAVE", 6) == 0) {
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
-					send_message(connfd, "GOODBYE");
+					send_message(connfd, "GOODBYE\n");
 					return 1;
 				}
 			}
-			return send_message(connfd, "You are not currently in any room");
+			return send_message(connfd, "You are not currently in any room\n");
 
 		}
 		else if (strncmp(message, "\\WHO", 4) == 0) {
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
-				return send_message(connfd, "You are not in any room.");
+				return send_message(connfd, "You are not in any room.\n");
 			char user_list[MAXUSERS * 32] = "";
 			
 			for (int i = 0; i < roomList[roomindex]->users; i++) {
@@ -201,7 +201,7 @@ int process_message(int connfd, char *message) {
 		else if (strncmp(message, "\\PYRAMID", 8) == 0) {
 			char *word;
 			if ((word = strtok(message + 9, "\n")) == NULL)
-				return send_message(connfd, "Invalid command. Usage: \\PYRAMID word");
+				return send_message(connfd, "Invalid command. Usage: \\PYRAMID word\n");
 			char pyramid[1000] = "";
 			int size = strlen(word);
 			for (int i = 0; i < size; i++) {
@@ -222,7 +222,7 @@ int process_message(int connfd, char *message) {
 			}
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
-				return send_message(connfd, "You are not in any room.");
+				return send_message(connfd, "You are not in any room.\n");
 			for (int i = 0; i < roomList[roomindex]->users; i++) {
 				send_message(roomList[roomindex]->user_list[i]->sockfd, pyramid);
 			}
@@ -230,7 +230,7 @@ int process_message(int connfd, char *message) {
 		else {
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
-				return send_message(connfd, "You are not in any room.");
+				return send_message(connfd, "You are not in any room.\n");
 			struct User *target_user = NULL;
 			struct Room *currentroom = roomList[roomindex];
 			char *nickname = strtok(message + 1, " ");
@@ -244,14 +244,15 @@ int process_message(int connfd, char *message) {
 			if (target_user == NULL) {
 				char ret[300] = "";
 				strcat(ret, message);
-				strcat(ret, " command not recognized.");
+				strcat(ret, " command not recognized.\n");
 				return send_message(connfd, ret);
 			}
 			char name_message[300] = "";
 			struct User *who = user_from_connfd(connfd);
 			if (who == NULL) return -1;
+			strcat(name_message, "[DM] ");
 			strcat(name_message, who->nickname);
-			strcat(name_message, "[DM]: ");
+			strcat(name_message, ": ");
 			strcat(name_message, direct_message);
 			return send_message(target_user->sockfd, name_message);
 		}
@@ -259,7 +260,7 @@ int process_message(int connfd, char *message) {
 	else {
 		int roomindex;
 		if ((roomindex = find_room_index(connfd)) == -1)
-			return send_message(connfd, "You are not in any room.");
+			return send_message(connfd, "You are not in any room.\n");
 		char name_message[300] = "";
 		struct User *who = user_from_connfd(connfd);
 		strcat(name_message, who->nickname);
