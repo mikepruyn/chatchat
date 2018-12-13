@@ -202,6 +202,7 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\LEAVE: When the server receives this command it will remove the user from the room and, send the single message GOODBYE, and disconnect the client.\n");
 			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
+			strcat(ret, "\\PYRAMID word: Creates a pyramid based on the given word. Not for casual use.\n");
 			return send_message(connfd, ret);
 
 		} else if (strncmp(message, "\\PYRAMID", 8) == 0) {
