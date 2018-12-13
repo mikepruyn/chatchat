@@ -1,0 +1,10 @@
+\HELP
+\JOIN andy room1
+where is everyone?
+\JOIN mike room1
+\JOIN gare room2
+\WHO
+\ROOMS
+\andy can you leave
+\LEAVE
+wait!

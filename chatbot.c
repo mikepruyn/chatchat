@@ -16,7 +16,7 @@
 #define MAXUSERS 100
 #define MAXROOMS 100
 
- /* Simplifies calls to bind(), connect(), and accept() */
+/* Simplifies calls to bind(), connect(), and accept() */
 typedef struct sockaddr SA;
 
 /* Max text line length */
@@ -35,20 +35,24 @@ struct Room* roomList[MAXROOMS];
 //roomlist index
 int roomi = 0;
 
+
+//User object
 struct User {
 	char nickname[30];
 	int sockfd;
 	struct Room *room;
 };
 
+
+//Room object
 struct Room {
 	char name[30];
 	struct User * user_list[MAXUSERS];
 	int users;
 };
 
+//creates room and adds it to our roomList array
 struct Room *create_room(char *name) {
-
 	struct Room *newRoom = malloc(sizeof(struct Room));
 	strcpy(newRoom->name, name);
 	newRoom->users = 0;
@@ -58,6 +62,7 @@ struct Room *create_room(char *name) {
 	return newRoom;
 }
 
+//creates user and adds them to a specific room
 struct User *create_user(char *name, int connfd, struct Room* room) {
 	struct User *newUser = malloc(sizeof(struct User));
 	strcpy(newUser->nickname, name);
@@ -70,12 +75,14 @@ struct User *create_user(char *name, int connfd, struct Room* room) {
 	return newUser;
 }
 
+//prints all rooms, mostly for debugging
 void print_room_list() {
 	for (int i = 0; i < roomi; i++) {
 		printf("%s\n", roomList[i]->name);
 	}
 }
 
+//returns the room index given a specific socket fd, otherwise -1
 int find_room_index(int connfd) {
 	for (int i = 0; i < roomi; i++) {
 		for (int j = 0; j < roomList[i]->users; j++) {
@@ -86,6 +93,7 @@ int find_room_index(int connfd) {
 	} return -1;
 }
 
+//finds a user based on a given name by searching through all rooms, otherwise -1
 int find_user(char* name) {
 	for (int i = 0; i < roomi; i++) {
 		for (int j = 0; j < roomList[i]->users; j++) {
@@ -96,16 +104,15 @@ int find_user(char* name) {
 	} return -1;
 }
 
-
+//finds a user based on a user socket fd, otherwise NULL
 struct User *user_from_connfd(int connfd) {
 	int roomindex = find_room_index(connfd);
 	for (int i = 0; i < roomList[roomindex]->users; i++) {
 		if (roomList[roomindex]->user_list[i]->sockfd == connfd) return roomList[roomindex]->user_list[i];
-	}
-	return NULL;
+	} return NULL;
 }
 
-//returns 1 on successful delete, -1 otherwise
+//deletes user from a specific room if found, otherwise -1
 int delete_user(int connfd, struct Room *room) {
 	pthread_mutex_lock(&user_lock);
 	for (int i = 0; i < room->users; i++) {
@@ -153,17 +160,18 @@ int process_message(int connfd, char *message) {
 			
 			return send_message(connfd, room_name);
 
-		}
-		else if (strncmp(message, "\\ROOMS", 6) == 0) {
+		} else if (strncmp(message, "\\ROOMS", 6) == 0) {
+
 			char room_list[MAXROOMS * 32] = "Rooms available: ";
 			for (int i = 0; i < roomi; i++) {
 				strcat(room_list, roomList[i]->name);
-				strcat(room_list, "\n");
+				if(i != roomi-1) strcat(room_list, ", ");
 			}
+			strcat(room_list, "\n");
 			return send_message(connfd, room_list);
 
-		}
-		else if (strncmp(message, "\\LEAVE", 6) == 0) {
+		} else if (strncmp(message, "\\LEAVE", 6) == 0) {
+
 			for (int i = 0; i < roomi; i++) {
 				if (delete_user(connfd, roomList[i]) == 1) {
 					send_message(connfd, "GOODBYE\n");
@@ -172,8 +180,8 @@ int process_message(int connfd, char *message) {
 			}
 			return send_message(connfd, "You are not currently in any room\n");
 
-		}
-		else if (strncmp(message, "\\WHO", 4) == 0) {
+		} else if (strncmp(message, "\\WHO", 4) == 0) {
+
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
 				return send_message(connfd, "You are not in any room.\n");
@@ -185,8 +193,7 @@ int process_message(int connfd, char *message) {
 			}
 			return send_message(connfd, user_list);
 
-		}
-		else if (strncmp(message, "\\HELP", 5) == 0) {
+		} else if (strncmp(message, "\\HELP", 5) == 0) {
 			
 			char ret[1000] = "";
 			strcat(ret, "Possible commands are:\n");
@@ -196,12 +203,13 @@ int process_message(int connfd, char *message) {
 			strcat(ret, "\\WHO: When the server receives this command it will send a list the users in the room the user is currently in.\n");
 			strcat(ret, "\\nickname message: When the server receives this command it will send the message to the user specified by nickname.\n");
 			return send_message(connfd, ret);
-		}
-		//creates a pyramid out of the input word or phrase and sends it to all users in the room
-		else if (strncmp(message, "\\PYRAMID", 8) == 0) {
-			char *word;
+
+		} else if (strncmp(message, "\\PYRAMID", 8) == 0) {
+			//creates a pyramid out of the input word or phrase and sends it to all users in the room
+			char *word = NULL;
 			if ((word = strtok(message + 9, "\n")) == NULL)
 				return send_message(connfd, "Invalid command. Usage: \\PYRAMID word\n");
+
 			char pyramid[1000] = "";
 			int size = strlen(word);
 			for (int i = 0; i < size; i++) {
@@ -212,6 +220,7 @@ int process_message(int connfd, char *message) {
 				}
 				strcat(pyramid, "\n\0");
 			}
+
 			for (int i = size; i > 0; i--) {
 				for (int j = 0; j < i; j++) {
 					char character[2] = "\0";
@@ -220,17 +229,19 @@ int process_message(int connfd, char *message) {
 				}
 				strcat(pyramid, "\n\0");
 			}
+
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
 				return send_message(connfd, "You are not in any room.\n");
+
 			for (int i = 0; i < roomList[roomindex]->users; i++) {
 				send_message(roomList[roomindex]->user_list[i]->sockfd, pyramid);
 			}
-		}
-		else {
+		} else {
 			int roomindex;
 			if ((roomindex = find_room_index(connfd)) == -1)
 				return send_message(connfd, "You are not in any room.\n");
+
 			struct User *target_user = NULL;
 			struct Room *currentroom = roomList[roomindex];
 			char *nickname = strtok(message + 1, " ");
@@ -241,12 +252,14 @@ int process_message(int connfd, char *message) {
 					break;
 				}
 			}
+
 			if (target_user == NULL) {
 				char ret[300] = "";
 				strcat(ret, message);
 				strcat(ret, " command not recognized.\n");
 				return send_message(connfd, ret);
 			}
+
 			char name_message[300] = "";
 			struct User *who = user_from_connfd(connfd);
 			if (who == NULL) return -1;
@@ -254,24 +267,29 @@ int process_message(int connfd, char *message) {
 			strcat(name_message, who->nickname);
 			strcat(name_message, ": ");
 			strcat(name_message, direct_message);
+
 			return send_message(target_user->sockfd, name_message);
 		}
-	}
-	else {
+	} else {
 		int roomindex;
 		if ((roomindex = find_room_index(connfd)) == -1)
 			return send_message(connfd, "You are not in any room.\n");
+
 		char name_message[300] = "";
 		struct User *who = user_from_connfd(connfd);
 		strcat(name_message, who->nickname);
 		strcat(name_message, ": ");
 		strcat(name_message, message);
+
 		for (int i = 0; i < roomList[roomindex]->users; i++) {
 			send_message(roomList[roomindex]->user_list[i]->sockfd, name_message);
 		}
 	}
 
 }
+
+// rest of code is from original echo server example file
+
 
 // The main function that each thread will execute.
 void chat(int connfd) {
